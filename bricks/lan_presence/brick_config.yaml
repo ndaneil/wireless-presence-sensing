@@ -1,0 +1,25 @@
+id: local:lan_presence
+name: LAN Presence
+description: LAN device inventory and person presence with a Python API, HTTP data, and Bridge integration.
+variables:
+  - name: PRESENCE_MDNS
+    default_value: "1"
+    description: Discover .local names directly over LAN multicast. Set to 0 to disable.
+  - name: PRESENCE_INTERFACE
+    default_value: wlan0
+    description: Built-in LAN interface to scan.
+  - name: PRESENCE_SCAN_INTERVAL
+    default_value: "60"
+    description: Seconds between completed scans (minimum 10).
+  - name: PRESENCE_MAX_HOSTS
+    default_value: "1024"
+    description: Refuse connected subnets larger than this host limit.
+  - name: PRESENCE_CONCURRENCY
+    default_value: "32"
+    description: Concurrent ping probes (1 to 64).
+  - name: PRESENCE_DEMO
+    default_value: "0"
+    description: Set to 1 for sample data without network probes. Use a separate app copy.
+  - name: PRESENCE_LED
+    default_value: "1"
+    description: Set to 0 to disable the example application's LED updates.

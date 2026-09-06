@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home presence · UNO Q</title>
+<style>
+:root{font-family:system-ui,sans-serif;color:#e6edf5;background:#101820;color-scheme:dark}body{max-width:1120px;margin:40px auto;padding:0 22px}header,.toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}h1{font-size:2.1rem;margin:8px 0}h2{font-size:1.2rem}small,.muted{color:#a6b8c8}.panel{background:#19252f;border:1px solid #344653;border-radius:14px;padding:22px;margin:24px 0}.badge{display:inline-block;padding:8px 14px;border-radius:24px;background:#435362;font-weight:700}.HOME{background:#175b49;color:#a5f4cc}.AWAY{background:#344862;color:#c0d9ff}.UNKNOWN{background:#66552c;color:#ffe2a2}button,input,select{font:inherit;border:1px solid #587083;border-radius:7px;padding:9px;background:#101820;color:#e6edf5}button{cursor:pointer;background:#206857}button:disabled{opacity:.5;cursor:wait}table{width:100%;border-collapse:collapse}td,th{text-align:left;padding:14px 8px;border-bottom:1px solid #344653}th{color:#a6b8c8;font-size:.85rem}.scroll{overflow-x:auto}#people{display:flex;gap:14px;flex-wrap:wrap;margin-top:20px}.person{background:#101820;padding:14px;border-radius:9px}dialog{background:#19252f;color:#e6edf5;border:1px solid #587083;border-radius:12px;max-width:420px;width:80%}dialog::backdrop{background:#0009}label{display:block;margin:16px 0}label input:not([type=checkbox]),label select{display:block;box-sizing:border-box;width:100%;margin-top:6px}#message{color:#ffe2a2;min-height:1.5em}.eyebrow{text-transform:uppercase;letter-spacing:.14em;color:#7ed6bd;font-size:.8rem}
+</style>
+</head>
+<body>
+<header><div><div class="eyebrow">UNO Q LAN monitor{% if demo %} Demo{% endif %}</div><h1>Home presence</h1><p class="muted">People and devices on your local network</p></div><span id="home" class="badge UNKNOWN">UNKNOWN</span></header>
+<section class="panel"><div id="reason">Waiting for discovery…</div><div id="people"></div></section>
+<div class="toolbar"><h2>Device inventory</h2><div><button id="add-person">Add person</button> <button id="scan">Scan now</button></div></div>
+<p id="scan-status" class="muted"></p><p id="message" role="status"></p>
+<div class="panel scroll"><table><thead><tr><th>Device</th><th>IP address</th><th>Last confirmed</th><th>Presence</th><th></th></tr></thead><tbody id="devices"></tbody></table><p id="empty">No devices yet. Run a scan to discover your network.</p></div>
+<p class="muted">Presence uses selected devices and a grace period. Sleeping phones and network isolation can reduce visibility.</p>
+<dialog id="editor"><form id="edit-form"><h2>Edit device</h2><label>Friendly name<input id="friendly" maxlength="100"></label><label>Person<select id="owner"></select></label><label><input type="checkbox" id="tracked"> Use for presence</label><label>Away timeout (minutes)<input id="timeout" type="number" min="1" max="1440" required></label><p id="edit-error" role="alert"></p><button type="submit">Save</button> <button type="button" id="cancel">Cancel</button></form></dialog>
+<dialog id="person-dialog"><form id="person-form"><h2>Add person</h2><label>Name<input id="person-name" maxlength="100" required></label><p id="person-error" role="alert"></p><button>Add</button> <button type="button" id="person-cancel">Cancel</button></form></dialog>
+<script>
+const $ = id => document.getElementById(id);
+let devices = [], people = [], editing;
+async function api(path, method='GET', body) {
+ const response = await fetch(path,{method,headers:body ? {'Content-Type':'application/json'} : {},body:body ? JSON.stringify(body) : undefined});
+ const data = await response.json();
+ if(!response.ok) throw new Error(typeof data.detail==='string' ? data.detail : JSON.stringify(data.detail));
+ return data;
+}
+function cell(row, text){const td=document.createElement('td');td.textContent=text;row.append(td);return td;}
+function age(timestamp){if(timestamp===null)return 'Never confirmed';const seconds=Math.max(0,Date.now()/1000-timestamp);return seconds<60?'Just now':Math.floor(seconds/60)+'m ago';}
+async function refresh(){
+ try {
+ const [ds, ps, presence]=await Promise.all([api('/api/devices'),api('/api/people'),api('/api/presence')]);devices=ds;people=ps;
+ $('home').textContent=presence.state;$('home').className='badge '+presence.state;$('reason').textContent=presence.reason;
+ $('people').replaceChildren();for(const p of presence.people){const el=document.createElement('div');el.className='person';el.textContent=p.name+' · '+p.state;$('people').append(el);}
+ $('devices').replaceChildren();$('empty').hidden=devices.length>0;
+ for(const d of devices){const row=document.createElement('tr');const name=cell(row,d.friendly_name||d.hostname||'Unnamed device');const mac=document.createElement('small');mac.textContent=d.mac;name.append(document.createElement('br'),mac);cell(row,d.current_ip||'—');cell(row,age(d.last_seen));cell(row,d.presence_enabled ? (people.find(p=>p.id===d.person_id)?.name||'Unassigned')+' · '+presence.devices[d.id] : 'Not tracked');const action=cell(row,'');const button=document.createElement('button');button.textContent='Edit';button.onclick=()=>edit(d);action.append(button);$('devices').append(row);}
+ const s=presence.scan;$('scan').disabled=s.running;$('scan-status').textContent=(s.demo?'Demo data':s.interface)+' · '+s.networks.join(', ')+' · '+(s.running?'Scanning…':'Last scan: '+age(s.last_success));
+ $('message').textContent=s.error||s.warnings.join(' · ');
+ }catch(error){$('message').textContent=error.message;}
+}
+function edit(d){editing=d.id;$('friendly').value=d.friendly_name||'';$('tracked').checked=!!d.presence_enabled;$('timeout').value=d.away_timeout_seconds/60;$('owner').replaceChildren(new Option('Unassigned',''));for(const p of people)$('owner').add(new Option(p.name,p.id));$('owner').value=d.person_id||'';$('edit-error').textContent='';$('editor').showModal();}
+$('cancel').onclick=()=>$('editor').close();
+$('edit-form').onsubmit=async event=>{event.preventDefault();try{await api('/api/devices/'+editing,'PATCH',{friendly_name:$('friendly').value.trim()||null,person_id:$('owner').value?Number($('owner').value):null,presence_enabled:$('tracked').checked,away_timeout_seconds:Number($('timeout').value)*60});$('editor').close();await refresh();}catch(error){$('edit-error').textContent=error.message;}};
+$('scan').onclick=async()=>{$('scan').disabled=true;$('message').textContent='Scanning…';try{await api('/api/scan','POST');}catch(error){$('message').textContent=error.message;}finally{await refresh();}};
+$('add-person').onclick=()=>{$('person-name').value='';$('person-error').textContent='';$('person-dialog').showModal();};$('person-cancel').onclick=()=>$('person-dialog').close();
+$('person-form').onsubmit=async event=>{event.preventDefault();try{await api('/api/people','POST',{name:$('person-name').value});$('person-dialog').close();await refresh();}catch(error){$('person-error').textContent=error.message;}};
+refresh();setInterval(refresh,10000);
+</script>
+</body></html>

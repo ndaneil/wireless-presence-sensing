@@ -1,0 +1,30 @@
+services:
+  lan-presence:
+    pull_policy: build
+    build:
+      context: .
+      dockerfile: Dockerfile
+    network_mode: host
+    user: "1000:1000"
+    cap_drop:
+      - ALL
+    cap_add:
+      - NET_RAW
+    environment:
+      PRESENCE_MDNS: "${PRESENCE_MDNS:-1}"
+      PRESENCE_INTERFACE: "${PRESENCE_INTERFACE:-wlan0}"
+      PRESENCE_DATABASE: /data/presence.sqlite3
+      PRESENCE_SCAN_INTERVAL: "${PRESENCE_SCAN_INTERVAL:-60}"
+      PRESENCE_MAX_HOSTS: "${PRESENCE_MAX_HOSTS:-1024}"
+      PRESENCE_CONCURRENCY: "${PRESENCE_CONCURRENCY:-32}"
+      PRESENCE_DEMO: "${PRESENCE_DEMO:-0}"
+    volumes:
+      - "${APP_HOME}/data/lan-presence:/data"
+    init: true
+    healthcheck:
+      test: ["CMD", "python", "/service/healthcheck.py"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 10s
+    stop_grace_period: 10s

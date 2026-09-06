@@ -1,0 +1,7 @@
+name: LAN Presence Monitor
+description: Discover LAN devices, associate them with people, and share presence data with Python components and the UNO Q LED matrix.
+icon: 🏠
+ports:
+  - 8000
+bricks:
+  - local:lan_presence: {}
